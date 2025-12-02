@@ -3,10 +3,10 @@
 #include <fstream>
 #include <vector>
 #include <string>
-#include <iomanip>
+#include <sstream>
 using namespace std;
 
-string archivo = "Gastos.txt";
+string archivo = "gastos.csv";
 
 struct Gasto {
     float monto;
@@ -15,28 +15,51 @@ struct Gasto {
     string descripcion;
 };
 
+// ======================================================
+// FUNCIONES DE VALIDACIÓN
+// ======================================================
+
+bool validarFecha(const string& fecha) {
+    // Formato: YYYY-MM-DD
+    if (fecha.length() != 10) return false;
+    if (fecha[4] != '-' || fecha[7] != '-') return false;
+    
+    for (int i = 0; i < 10; i++) {
+        if (i == 4 || i == 7) continue;
+        if (!isdigit(fecha[i])) return false;
+    }
+    return true;
+}
+
+bool validarMonto(float monto) {
+    return monto > 0;
+}
+
+// ======================================================
+// FUNCIONES DE ARCHIVO (FORMATO VERTICAL)
+// ======================================================
+
 vector<Gasto> cargarGastos() {
-    vector<Gasto> listaGastos;
+    vector<Gasto> gastos;
     ifstream f(archivo);
     
-    if (!f) {
-        return listaGastos;
-    }
+    if (!f) return gastos;
     
-    Gasto gastoTemporal;
-    string montoStr;
+    string linea;
+    Gasto g;
     
-    while (getline(f, montoStr)) {
-        getline(f, gastoTemporal.categoria);
-        getline(f, gastoTemporal.fecha);
-        getline(f, gastoTemporal.descripcion);
+    // Leer en formato VERTICAL
+    while (getline(f, linea)) {
+        g.monto = stof(linea);           // Línea 1: monto
+        getline(f, g.categoria);         // Línea 2: categoría
+        getline(f, g.fecha);             // Línea 3: fecha
+        getline(f, g.descripcion);       // Línea 4: descripción
         
-        gastoTemporal.monto = stof(montoStr);
-        listaGastos.push_back(gastoTemporal);
+        gastos.push_back(g);
     }
     
     f.close();
-    return listaGastos;
+    return gastos;
 }
 
 void guardarGastos(const vector<Gasto>& gastos) {
@@ -52,28 +75,52 @@ void guardarGastos(const vector<Gasto>& gastos) {
     f.close();
 }
 
+// ======================================================
+// FUNCIONES DE GESTIÓN
+// ======================================================
+
+void mostrarLogo() {
+    cout << "=========================================\n";
+    cout << "    💰 CONTROL DE GASTOS PERSONALES 💰   \n";
+    cout << "=========================================\n\n";
+}
+
 void agregarGasto() {
     vector<Gasto> gastos = cargarGastos();
-    Gasto nuevoGasto;
+    Gasto nuevo;
     
-    cout << "\n--- AGREGAR NUEVO GASTO ---\n";
+    cout << "\n--- NUEVO GASTO ---\n";
     
-    cout << "Monto: $";
-    cin >> nuevoGasto.monto;
+    // Monto con validación
+    do {
+        cout << "Monto: $";
+        cin >> nuevo.monto;
+        if (!validarMonto(nuevo.monto)) {
+            cout << "Error: El monto debe ser mayor a 0\n";
+        }
+    } while (!validarMonto(nuevo.monto));
     cin.ignore();
     
+    // Categoría
     cout << "Categoria: ";
-    getline(cin, nuevoGasto.categoria);
+    getline(cin, nuevo.categoria);
     
-    cout << "Fecha: ";
-    getline(cin, nuevoGasto.fecha);
+    // Fecha con validación
+    do {
+        cout << "Fecha (YYYY-MM-DD): ";
+        getline(cin, nuevo.fecha);
+        if (!validarFecha(nuevo.fecha)) {
+            cout << "Error: Formato debe ser YYYY-MM-DD\n";
+        }
+    } while (!validarFecha(nuevo.fecha));
     
+    // Descripción
     cout << "Descripcion: ";
-    getline(cin, nuevoGasto.descripcion);
+    getline(cin, nuevo.descripcion);
     
-    gastos.push_back(nuevoGasto);
+    gastos.push_back(nuevo);
     guardarGastos(gastos);
-    cout << "Gasto agregado correctamente!\n";
+    cout << "✅ Gasto agregado correctamente!\n";
 }
 
 void mostrarGastos() {
@@ -84,16 +131,129 @@ void mostrarGastos() {
         return;
     }
     
-    cout << "\n=== MIS GASTOS ===\n";
+    cout << "\n--- TODOS LOS GASTOS ---\n";
     for (int i = 0; i < gastos.size(); i++) {
-        cout << "Gasto #" << (i + 1) << ":\n";
-        cout << "Monto: $" << gastos[i].monto << endl;
-        cout << "Categoria: " << gastos[i].categoria << endl;
-        cout << "Fecha: " << gastos[i].fecha << endl;
-        cout << "Descripcion: " << gastos[i].descripcion << endl;
-        cout << endl;
+        cout << i + 1 << ". $" << gastos[i].monto 
+             << " - " << gastos[i].categoria
+             << " (" << gastos[i].fecha << ")\n";
+        cout << "   " << gastos[i].descripcion << "\n\n";
     }
 }
+
+void eliminarGasto() {
+    vector<Gasto> gastos = cargarGastos();
+    
+    if (gastos.empty()) {
+        cout << "No hay gastos para eliminar.\n";
+        return;
+    }
+    
+    mostrarGastos();
+    
+    int indice;
+    cout << "Numero de gasto a eliminar (0 para cancelar): ";
+    cin >> indice;
+    
+    if (indice == 0) return;
+    
+    if (indice < 1 || indice > gastos.size()) {
+        cout << "❌ Numero invalido\n";
+        return;
+    }
+    
+    gastos.erase(gastos.begin() + (indice - 1));
+    guardarGastos(gastos);
+    cout << "✅ Gasto eliminado correctamente!\n";
+}
+
+// ======================================================
+// FUNCIONES DE ANÁLISIS
+// ======================================================
+
+void gastoTotal() {
+    vector<Gasto> gastos = cargarGastos();
+    float total = 0;
+    
+    for (const auto& g : gastos) {
+        total += g.monto;
+    }
+    
+    cout << "\n--- GASTO TOTAL ---\n";
+    cout << "Total gastado: $" << total << endl;
+    cout << "Cantidad de gastos: " << gastos.size() << endl;
+}
+
+void gastoPorCategoria() {
+    vector<Gasto> gastos = cargarGastos();
+    
+    if (gastos.empty()) {
+        cout << "No hay gastos registrados.\n";
+        return;
+    }
+    
+    cout << "\n--- GASTOS POR CATEGORIA ---\n";
+    
+    vector<string> categorias;
+    vector<float> totales;
+    
+    for (const auto& g : gastos) {
+        bool encontrado = false;
+        for (int i = 0; i < categorias.size(); i++) {
+            if (categorias[i] == g.categoria) {
+                totales[i] += g.monto;
+                encontrado = true;
+                break;
+            }
+        }
+        if (!encontrado) {
+            categorias.push_back(g.categoria);
+            totales.push_back(g.monto);
+        }
+    }
+    
+    for (int i = 0; i < categorias.size(); i++) {
+        cout << "• " << categorias[i] << ": $" << totales[i] << endl;
+    }
+}
+
+void gastoPorPeriodo() {
+    vector<Gasto> gastos = cargarGastos();
+    
+    if (gastos.empty()) {
+        cout << "No hay gastos registrados.\n";
+        return;
+    }
+    
+    cout << "\n--- GASTOS POR PERIODO ---\n";
+    
+    vector<string> meses;
+    vector<float> totales;
+    
+    for (const auto& g : gastos) {
+        string mes = g.fecha.substr(0, 7); // YYYY-MM
+        
+        bool encontrado = false;
+        for (int i = 0; i < meses.size(); i++) {
+            if (meses[i] == mes) {
+                totales[i] += g.monto;
+                encontrado = true;
+                break;
+            }
+        }
+        if (!encontrado) {
+            meses.push_back(mes);
+            totales.push_back(g.monto);
+        }
+    }
+    
+    for (int i = 0; i < meses.size(); i++) {
+        cout << "• " << meses[i] << ": $" << totales[i] << endl;
+    }
+}
+
+// ======================================================
+// MENÚ PRINCIPAL
+// ======================================================
 
 void pausa() {
     cout << "\nPresione Enter para continuar...";
@@ -101,38 +261,41 @@ void pausa() {
     cin.get();
 }
 
-int main() {
+void menuPrincipal() {
     int opcion;
     
     do {
         system("cls");
-        cout << "=== CONTROL DE GASTOS ===\n";
+        mostrarLogo();
+        
         cout << "1. Agregar gasto\n";
-        cout << "2. Ver gastos\n";
-        cout << "3. Salir\n";
-        cout << "Opcion: ";
+        cout << "2. Ver todos los gastos\n";
+        cout << "3. Eliminar gasto\n";
+        cout << "4. Gasto total\n";
+        cout << "5. Gastos por categoria\n";
+        cout << "6. Gastos por periodo\n";
+        cout << "7. Salir\n";
+        cout << "\nSeleccione una opcion: ";
         cin >> opcion;
         cin.ignore();
         
         switch(opcion) {
-            case 1:
-                agregarGasto();
-                break;
-            case 2:
-                mostrarGastos();
-                break;
-            case 3:
-                cout << "Saliendo...\n";
-                break;
-            default:
-                cout << "Opcion invalida!\n";
+            case 1: agregarGasto(); break;
+            case 2: mostrarGastos(); break;
+            case 3: eliminarGasto(); break;
+            case 4: gastoTotal(); break;
+            case 5: gastoPorCategoria(); break;
+            case 6: gastoPorPeriodo(); break;
+            case 7: cout << "¡Hasta pronto! 👋\n"; break;
+            default: cout << "❌ Opcion invalida!\n";
         }
         
-        if (opcion != 3) {
-            pausa();
-        }
+        if (opcion != 7) pausa();
         
-    } while(opcion != 3);
-    
+    } while(opcion != 7);
+}
+
+int main() {
+    menuPrincipal();
     return 0;
 }
